@@ -1,0 +1,16 @@
+# Ignorar os ficheiros gigantes do Yelp Dataset e os JSONL filtrados
+*.json
+filtered/
+categorias.csv
+yelp_academic_dataset_*.json
+
+# Ambientes Virtuais e Cache de Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+.env
+
+# Ficheiros de sistema
+.DS_Store
+Thumbs.db
