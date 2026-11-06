@@ -1,0 +1,14 @@
+{
+  "_id": "rev_8xJkL9",
+  "venue_id": "Pns2l4eNsfO8kk83dixA6A",
+  "user_id": "usr_abc123",
+  "stars": 5,
+  "useful": 3,
+  "funny": 0,
+  "cool": 1,
+  "date": { "$date": "2024-03-01T00:00:00Z" },
+  "text": "Great place to study, lots of outlets and the lemon cake is amazing!",
+  "mentions_wifi": true,
+  "mentions_outlets": true,
+  "mentions_pastry": true
+}

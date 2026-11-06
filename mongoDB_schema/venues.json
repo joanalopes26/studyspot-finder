@@ -1,0 +1,39 @@
+{
+  "_id": "Pns2l4eNsfO8kk83dixA6A",
+  "name": "Example Café",
+  "address": "1616 Chapala St",
+  "city": "Santa Barbara",
+  "state": "CA",
+  "postal_code": "93101",
+  "location": {
+    "type": "Point",
+    "coordinates": [-119.7111968, 34.4266787]
+  },
+  "stars": 4.5,
+  "review_count": 120,
+  "is_open": true,
+  "categories": ["Coffee & Tea", "Bakeries"],
+  "amenities": {
+    "wifi": "free",
+    "noise_level": "quiet",
+    "outlet_mentions": 14
+  },
+  "recent_reviews": [
+    {
+      "review_id": "rev_8xJkL9",
+      "user_id": "usr_abc123",
+      "user_name": "Ana",
+      "stars": 5,
+      "date": { "$date": "2024-03-01T00:00:00Z" },
+      "text_snippet": "Great place to study, lots of outlets and the lemon cake is amazing!"
+    },
+    {
+      "review_id": "rev_2mQpR4",
+      "user_id": "usr_def456",
+      "user_name": "Rui",
+      "stars": 4,
+      "date": { "$date": "2024-02-11T00:00:00Z" },
+      "text_snippet": "Wi-Fi is fast and it is quiet in the mornings. Gets crowded after lunch."
+    }
+  ]
+}

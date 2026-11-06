@@ -1,5 +1,9 @@
-# Ignorar os ficheiros gigantes do Yelp Dataset e os JSONL filtrados
+# Ignorar os ficheiros gigantes do Yelp Dataset
 *.json
+
+# EXCEÇÃO: Não ignorar os JSONs do MongoDB Document Schema!
+!mongoDB_schema/*.json
+
 filtered/
 categorias.csv
 yelp_academic_dataset_*.json

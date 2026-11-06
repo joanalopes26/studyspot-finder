@@ -1,0 +1,7 @@
+{
+  "_id": "usr_abc123",
+  "name": "Ana",
+  "review_count": 42,
+  "yelping_since": { "$date": "2021-08-15T00:00:00Z" },
+  "average_stars": 4.2
+}
