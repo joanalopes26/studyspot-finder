@@ -1,0 +1,15 @@
+Design Choices Relational Schema MySQL:
+
+Constraints
+-ON DELETE CASCADE: Automatically deletes related records (such as reviews, study metrics, and business categories) if the parent User or Business is deleted, preventing orphan data.
+
+-ON DELETE RESTRICT: Prevents a Category from being deleted if any Business is still associated with it.
+
+-CHECK: Enforces data validity directly inside MySQL by ensuring ratings (stars and study_score) remain strictly within the 1.0 to 5.0 range, and boolean flags are restricted to 0 or 1.
+
+Schema Architecture:
+-Business_Category (Many-to-Many): In the raw dataset, categories were stored as a single comma-separated text string per business. We moved them into a separate Category table using Business_Category as a junction table. This avoids repeating text strings, prevents update errors, and lets us easily query or filter places by type (e.g., cafés vs. libraries).
+
+-Amenities (One-to-One): Instead of stuffing study-specific attributes (wifi, noise_level, study_score) into the main Business table, we moved them into their own table linked by business_id. This keeps the Business table light for fast general lookups.
+
+-Review & User (One-to-Many): Reviews are kept separate from both user profiles and business profiles. A user can post multiple reviews, but separating them avoids repeating user metadata (like name or account creation date) across every review entry.
