@@ -1,71 +1,21 @@
-Design Choices – MongoDB Document Schema (StudySpot Finder)
-============================================================
+Design Choices MongoDB (StudySpot Finder)
+=========================================
 
-1. Collection Strategy
-   The relational schema uses 5 tables (Business, Category, Business_Category,
-   Business_Amenities, Review, User).  In MongoDB we consolidate these into
-   3 collections — venues, reviews, users — taking advantage of MongoDB's
-   flexible document model to reduce joins.
+1. Collections (5 tabelas MySQL -> 3 coleções MongoDB)
+Redução de joins usando o modelo documental: 'venues', 'reviews' e 'users'.
 
 2. Embedding vs. Referencing
+- categories (Embedded): Array de strings em 'venues'. Elimina a tabela N:M (Business_Category) e dispensou $lookup, já que categorias são sempre lidas com o espaço.
+- amenities (Embedded): Subdocumento 1:1 em 'venues' (wifi, ruído, contagem de tomadas). Evita coleção extra.
+- recent_reviews (Embedded Bounded): Até 10 reviews recentes (snippet <= 200 chars) em 'venues'. Permite carregar a página principal do local numa única leitura rápida sem estourar o limite de 16MB.
+- reviews (Referenced): Coleção própria referenciando venue_id e user_id. Necessário pelo volume (100k registos), permitindo paginação e agregações independentes sem sobrecarregar 'venues'.
+- users (Referenced): Coleção própria para evitar replicação de metadados de utilizador entre múltiplos reviews.
 
-   EMBEDDED (denormalised):
-   ─ categories      → Array of strings inside the venue document.
-     Justification: categories are always read together with the venue, never
-     queried as a standalone entity. Storing them as an embedded array avoids
-     the many-to-many JOIN table and eliminates the need for $lookup.
+3. Campos Derivados
+- mentions_wifi, mentions_outlets, mentions_pastry (reviews): Flags booleanas geradas via regex no texto da review durante a ingestão, evitando pesquisas lentas por texto no futuro.
+- outlet_mentions (venues.amenities): Total pré-calculado de menções a tomadas para ordenação direta de locais de estudo.
 
-   ─ amenities        → Sub-document inside the venue (wifi, noise_level,
-                         outlet_mentions).
-     Justification: one-to-one relationship; always displayed together with
-     the venue.  An embedded object is natural in MongoDB and avoids an extra
-     collection or $lookup.
-
-   ─ recent_reviews   → Array of up to 10 recent review summaries embedded in
-                         the venue document.
-     Justification: enables the "venue detail page" use case with a single
-     read.  Bounded to 10 items (maxItems: 10) to prevent document growth.
-     Only a snippet (≤200 chars) of the text is stored to keep the venue
-     document lightweight.
-
-   REFERENCED (normalised):
-   ─ reviews          → Separate collection, referencing venue_id and user_id.
-     Justification: reviews are the main data entity (100 000 records).
-     Embedding them all inside venues would exceed the 16 MB document limit
-     for popular venues and make writes expensive.  A separate collection
-     supports paginated listing, aggregation pipelines, and independent
-     indexing.
-
-   ─ users            → Separate collection.
-     Justification: users are referenced by reviews and may participate in
-     multiple venues.  A separate collection avoids duplication and is
-     consistent with the relational design.
-
-3. Derived / Computed Fields
-
-   ─ mentions_wifi, mentions_outlets, mentions_pastry  (reviews)
-     Boolean flags derived at ingestion time by running regex patterns over
-     the review text.  Pre-computing these avoids expensive $regex queries at
-     read time and enables efficient indexed filtering.
-
-   ─ outlet_mentions  (venues.amenities)
-     Count of reviews that mention power outlets / plugs.  Pre-aggregated at
-     ingestion time so the venue listing can sort by outlet availability
-     without running an aggregation on every request.
-
-4. Validation Rules
-   Strict JSON Schema validation is enforced on all three collections
-   (validationLevel: "strict", validationAction: "error") to ensure data
-   quality, mirroring the CHECK and NOT NULL constraints used in MySQL.
-
-5. Geospatial Support
-   Venue coordinates are stored as GeoJSON Point objects with a 2dsphere
-   index, enabling $near and $geoWithin queries for the "find study spots
-   near me" use case.  This is equivalent to MySQL's SPATIAL INDEX on the
-   POINT column.
-
-6. _id Strategy
-   All three collections use the original Yelp IDs as _id (string) instead
-   of auto-generated ObjectIds.  This ensures a natural mapping between
-   MySQL primary keys and MongoDB document identifiers, simplifying
-   cross-database consistency checks.
+4. Validação e Índices
+- JSON Schema Validation (nível strict/error) em todas as coleções, replicando as regras NOT NULL e CHECK do MySQL.
+- Índice geoespacial 2dsphere em 'venues.location' (GeoJSON Point) para suportar pesquisas de proximidade ($near).
+- Mapeamento direto de IDs: os _id mantêm os IDs originais do Yelp (strings) em vez de ObjectId, facilitando a consistência com as PKs do MySQL.
