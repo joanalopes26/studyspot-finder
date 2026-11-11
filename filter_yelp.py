@@ -6,7 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 
 # ------------------------------- CONFIG -------------------------------
-DATA_DIR = Path(".")                 # where the yelp_academic_dataset_*.json files are
+DATA_DIR = Path(".")                 
 OUT_DIR = Path("filtered")
 
 # Exact match against StudySpot categories
