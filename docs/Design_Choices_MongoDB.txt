@@ -1,6 +1,3 @@
-Design Choices MongoDB (StudySpot Finder)
-=========================================
-
 1. Collections (5 tabelas MySQL -> 3 coleções MongoDB)
 Redução de joins usando o modelo documental: 'venues', 'reviews' e 'users'.
 
@@ -12,7 +9,7 @@ Redução de joins usando o modelo documental: 'venues', 'reviews' e 'users'.
 - users (Referenced): Coleção própria para evitar replicação de metadados de utilizador entre múltiplos reviews.
 
 3. Campos Derivados
-- mentions_wifi, mentions_outlets, mentions_pastry (reviews): Flags booleanas geradas via regex no texto da review durante a ingestão, evitando pesquisas lentas por texto no futuro.
+- mentions_wifi, mentions_outlets, mentions_pastry (reviews): Flags bool geradas via regex no texto da review durante a ingestão, evitando pesquisas lentas por texto no futuro.
 - outlet_mentions (venues.amenities): Total pré-calculado de menções a tomadas para ordenação direta de locais de estudo.
 
 4. Validação e Índices
