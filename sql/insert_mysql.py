@@ -2,7 +2,7 @@ import json
 import mysql.connector
 import time
 
-start = time.time()
+start_insert = time.time()
 
 cnx = mysql.connector.connect(
     host="localhost",
@@ -13,6 +13,8 @@ cnx = mysql.connector.connect(
 cursor = cnx.cursor()
 
 #tabela USER
+
+start = time.time()
 
 dados_users = []
 with open("filtered/user_filtered.jsonl", "r", encoding="utf-8") as f:
@@ -34,10 +36,14 @@ sql_user = """
 """
 cursor.executemany(sql_user, dados_users)
 cnx.commit()
-print("Users inseridos.")
+end = time.time()
+print(f"User inseridos, tempo total: {end - start:.4f} segundos")
 
 
 #tabela BUSINESS (recolher categorias/amenities)
+
+start = time.time()
+
 dados_business = []
 amenities_temp = []
 categorias_unicas = set()
@@ -90,9 +96,12 @@ sql_business = """
 """
 cursor.executemany(sql_business, dados_business)
 cnx.commit()
-print("Businesses inseridos.")
+
+end = time.time()
+print(f"Businesses inseridos, tempo total: {end - start:.4f} segundos")
 
 #tabelas CATEGORY e BUSINESSCATEGORY
+start = time.time()
 sql_cat = "INSERT INTO Category (name) VALUES (%s)"
 cursor.executemany(sql_cat, [(c,) for c in categorias_unicas])
 cnx.commit()
@@ -105,11 +114,12 @@ dados_biz_cat = [(bid, mapa_categorias[cat]) for bid, cat in ligacoes_categorias
 sql_biz_cat = "INSERT INTO BusinessCategory (business_id, category_id) VALUES (%s, %s)"
 cursor.executemany(sql_biz_cat, dados_biz_cat)
 cnx.commit()
-print("Categorias associadas.")
+end = time.time()
+print(f"Categorias associadas, tempo total: {end - start:.4f} segundos")
 
 
 #ler REVIEWS, inserir BUSINESS_AMENITIES e inserir REVIEW
-
+start = time.time()
 dados_reviews = []
 contagem_outlets = {}
 
@@ -165,10 +175,12 @@ sql_review = """
 """
 cursor.executemany(sql_review, dados_reviews)
 cnx.commit()
-print("Amenities e Reviews inseridas.")
+end = time.time()
+print(f"Amenities e Reviews inseridas, tempo total: {end - start:.4f} segundos")
 
 cursor.close()
 cnx.close()
 
-end = time.time()
-print(f"Tempo total: {end - start:.4f} segundos")
+end_insert = time.time()
+print(" ")
+print(f"Tempo total da execução: {end_insert - start_insert:.4f} segundos")
