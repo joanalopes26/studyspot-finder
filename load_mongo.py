@@ -4,7 +4,7 @@ Transforma a databse Yelp filtrada no esquema MongoDB do StudySpot
 e carrega-a na base de dados 'studyspot'.
 
 IMPORTANTE!!!
-    no terminal mongoDB Compass da databse criada, correr o script mongoDB_schema/mongo_schema.js
+    no terminal mongoDB Compass da database criada, correr o script mongoDB_schema/mongo_schema.js
 """
 
 import json
