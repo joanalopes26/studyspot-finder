@@ -18,7 +18,10 @@ MONGO_URI  = "mongodb://localhost:27017"
 DB_NAME    = "studyspot"
 SEED       = 42
 
-DATA_DIR      = Path("filtered")
+# Permite executar a partir da raiz do projeto ou dentro de mongoDB/mongo
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = BASE_DIR / "filtered" if (BASE_DIR / "filtered").exists() else Path("filtered")
+
 BUSINESS_FILE = DATA_DIR / "business_filtered.jsonl"
 REVIEW_FILE   = DATA_DIR / "review_filtered.jsonl"
 USER_FILE     = DATA_DIR / "user_filtered.jsonl"

@@ -17,7 +17,9 @@ MYSQL_CONFIG = {
     "database": "studyspot"
 }
 
-DATA_DIR = Path("filtered")
+# Permite executar a partir da raiz do projeto ou dentro da pasta sql/
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR / "filtered" if (BASE_DIR / "filtered").exists() else Path("filtered")
 
 BUSINESS_FILE = DATA_DIR / "business_filtered.jsonl"
 REVIEW_FILE = DATA_DIR / "review_filtered.jsonl"

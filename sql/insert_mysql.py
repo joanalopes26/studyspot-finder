@@ -4,6 +4,11 @@ import mysql.connector
 import time
 import re
 import os
+from pathlib import Path
+
+# Permite executar a partir da raiz do projeto ou dentro da pasta sql/
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR / "filtered" if (BASE_DIR / "filtered").exists() else Path("filtered")
 
 # ─────────────────────────── REGEX ───────────────────────────
 
@@ -44,7 +49,7 @@ start = time.time()
 
 dados_users = []
 
-with open("filtered/user_filtered.jsonl", "r", encoding="utf-8") as f:
+with open(DATA_DIR / "user_filtered.jsonl", "r", encoding="utf-8") as f:
     for linha in f:
         if not linha.strip():
             continue
@@ -80,7 +85,7 @@ amenities_temp = []
 categorias_unicas = set()
 ligacoes_categorias = set()
 
-with open("filtered/business_filtered.jsonl", "r", encoding="utf-8") as f:
+with open(DATA_DIR / "business_filtered.jsonl", "r", encoding="utf-8") as f:
     for linha in f:
         if not linha.strip():
             continue
@@ -183,7 +188,7 @@ start = time.time()
 dados_reviews = []
 contagem_outlets = {}
 
-with open("filtered/review_filtered.jsonl", "r", encoding="utf-8") as f:
+with open(DATA_DIR / "review_filtered.jsonl", "r", encoding="utf-8") as f:
     for linha in f:
         if not linha.strip():
             continue
