@@ -10,7 +10,7 @@ MYSQL_CONFIG = {
 }
 
 N_CLIENTES = 10   #nº de clientes (threads) em simultâneo
-OPS = 5           #incrementos que cada cliente faz
+OPS = 5           #nº de incrementos que cada cliente faz
 
 
 #cada cliente lê o review_count e escreve +1
