@@ -169,9 +169,10 @@ def query_5_user_history(cursor, user_id=None):
     """
     Listar todos os locais onde um utilizador submeteu reviews
     Realiza JOIN entre User, Review e Business.
+    Se não for fornecido user_id, pesquisa o utilizador mais ativo (com mais reviews).
     """
     if not user_id:
-        cursor.execute("SELECT user_id FROM Review LIMIT 1")
+        cursor.execute("SELECT user_id FROM User ORDER BY review_count DESC LIMIT 1")
         row = cursor.fetchone()
         user_id = row["user_id"] if row else "demo_user"
 
@@ -198,11 +199,22 @@ def query_6_venue_trend(cursor, venue_id=None):
     """
     Analisa a evolução anual de um estabelecimento: número de reviews e rating médio por ano
     Opera apenas sobre a coleção reviews
+    Se não for fornecido venue_id, pesquisa o estabelecimento com maior número de reviews.
     """
+    venue_name = "N/A"
     if not venue_id:
-        cursor.execute("SELECT business_id FROM Review LIMIT 1")
+        cursor.execute("SELECT business_id, name FROM Business ORDER BY review_count DESC LIMIT 1")
         row = cursor.fetchone()
-        venue_id = row["business_id"] if row else "demo_venue"
+        if row:
+            venue_id = row["business_id"]
+            venue_name = row["name"]
+        else:
+            venue_id = "demo_venue"
+    else:
+        cursor.execute("SELECT name FROM Business WHERE business_id = %s", (venue_id,))
+        row = cursor.fetchone()
+        if row:
+            venue_name = row["name"]
 
     start = time.perf_counter()
 
@@ -220,7 +232,7 @@ def query_6_venue_trend(cursor, venue_id=None):
     results = cursor.fetchall()
     
     elapsed_ms = (time.perf_counter() - start) * 1000
-    return results, elapsed_ms, venue_id
+    return results, elapsed_ms, venue_id, venue_name
 
 # ----------------------------------------------------------------------
 # OPERAÇÕES DE ESCRITA: INSERT, UPDATE, DELETE
@@ -423,11 +435,11 @@ def main():
         print(f"     Última visita: {res5[0].get('venue_name')} ({res5[0].get('city')}) - {res5[0].get('user_stars')} ")
 
     #Q6
-    res6, t6, vid = query_6_venue_trend(cursor)
-    print(f"\n[Q6] Tendência Temporal do Estabelecimento '{vid}' (Aggregation + Temporal)")
+    res6, t6, vid, vname = query_6_venue_trend(cursor)
+    print(f"\n[Q6] Tendência Temporal do Estabelecimento Mais Popular '{vname}' ({vid})")
     print(f"     Tempo: {t6:.2f} ms | Anos de histórico: {len(res6)}")
     for yr in res6:
-        print(f"     Ano {yr.get('year')}: {yr.get('review_count')} reviews | Rating Médio: {yr.get('avg_stars')} ")
+        print(f"     Ano {yr.get('year')}: {yr.get('review_count'):3d} reviews | Rating Médio: {yr.get('avg_stars')} ★")
 
     print("\n" + "=" * 60)
     print(" OPERAÇÕES DE ESCRITA (INSERT, UPDATE, DELETE)")

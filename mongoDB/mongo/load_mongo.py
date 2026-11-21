@@ -231,8 +231,10 @@ def load_venues(reviews_by_venue):
         doc = {
             "_id":          bid,
             "name":         b.get("name", ""),
+            "address":      b.get("address", ""),
             "city":         b.get("city", ""),
             "state":        b.get("state", ""),
+            "postal_code":  b.get("postal_code", ""),
             "location":     location,
             "stars":        float(b.get("stars", 0)),
             "review_count": int(b.get("review_count", 0)),

@@ -206,11 +206,18 @@ def query_5_user_history(db, user_id=None):
     """
     Listar todos os locais onde um utilizador submeteu reviews.
     Filtra primeiro em reviews ($match precoce) e faz $lookup em venues.
+    Se não for fornecido user_id, pesquisa o utilizador mais ativo (com mais reviews).
     """
-    # Se nenhum user_id for passado, obtemos um dinamicamente da coleção para demonstração
     if not user_id:
-        sample_review = db.reviews.find_one({"user_id": {"$exists": True}})
-        user_id = sample_review["user_id"] if sample_review else "demo_user"
+        top_user = db.users.find_one(
+            {"review_count": {"$exists": True}},
+            sort=[("review_count", -1)]
+        )
+        if top_user:
+            user_id = top_user["_id"]
+        else:
+            sample_review = db.reviews.find_one({"user_id": {"$exists": True}})
+            user_id = sample_review["user_id"] if sample_review else "demo_user"
 
     start = time.perf_counter()
     pipeline = [
@@ -250,10 +257,24 @@ def query_6_venue_trend(db, venue_id=None):
     """
     Analisa a evolução anual de um estabelecimento: número de reviews e rating médio por ano.
     Opera apenas sobre a coleção reviews.
+    Se não for fornecido venue_id, pesquisa o estabelecimento com maior número de reviews.
     """
+    venue_name = "N/A"
     if not venue_id:
-        sample_review = db.reviews.find_one({"venue_id": {"$exists": True}})
-        venue_id = sample_review["venue_id"] if sample_review else "demo_venue"
+        top_venue = db.venues.find_one(
+            {"review_count": {"$exists": True}},
+            sort=[("review_count", -1)]
+        )
+        if top_venue:
+            venue_id = top_venue["_id"]
+            venue_name = top_venue.get("name", "N/A")
+        else:
+            sample_review = db.reviews.find_one({"venue_id": {"$exists": True}})
+            venue_id = sample_review["venue_id"] if sample_review else "demo_venue"
+    else:
+        v_doc = db.venues.find_one({"_id": venue_id})
+        if v_doc:
+            venue_name = v_doc.get("name", "N/A")
 
     start = time.perf_counter()
     pipeline = [
@@ -278,7 +299,7 @@ def query_6_venue_trend(db, venue_id=None):
     cursor = db.reviews.aggregate(pipeline)
     results = list(cursor)
     elapsed_ms = (time.perf_counter() - start) * 1000
-    return results, elapsed_ms, venue_id
+    return results, elapsed_ms, venue_id, venue_name
 
 
 # ----------------------------------------------------------------------
@@ -286,9 +307,10 @@ def query_6_venue_trend(db, venue_id=None):
 # ----------------------------------------------------------------------
 def crud_insert_review(db, venue_id=None, user_id="usr_test_goal3"):
     """
-    INSERT: Insere uma nova review e propaga a alteração ao documento do venue:
-      1. Insere o documento completo na coleção 'reviews'
-      2. Atualiza o documento em 'venues': incrementa 'review_count' ($inc)
+    INSERT: Insere uma nova review e propaga a alteração ao documento do venue e utilizador:
+      1. Garante que o utilizador existe em 'users' (upsert com $setOnInsert / $inc)
+      2. Insere o documento completo na coleção 'reviews'
+      3. Atualiza o documento em 'venues': incrementa 'review_count' ($inc)
          e insere no array embebido 'recent_reviews' ($push com $slice: -10)
     """
     import datetime
@@ -317,10 +339,25 @@ def crud_insert_review(db, venue_id=None, user_id="usr_test_goal3"):
     }
 
     start = time.perf_counter()
-    # 1. Inserir em reviews
+
+    # 1. Inserir ou atualizar utilizador (equivalente ao ON DUPLICATE KEY UPDATE do MySQL)
+    db.users.update_one(
+        {"_id": user_id},
+        {
+            "$setOnInsert": {
+                "name": "Test User Goal3",
+                "yelping_since": now,
+                "average_stars": 5.0
+            },
+            "$inc": {"review_count": 1}
+        },
+        upsert=True
+    )
+
+    # 2. Inserir em reviews
     db.reviews.insert_one(new_review)
 
-    # 2. Atualizar venue (incremental + array embebido de reviews recentes)
+    # 3. Atualizar venue (incremental + array embebido de reviews recentes)
     recent_entry = {
         "review_id": review_id,
         "user_id": user_id,
@@ -363,12 +400,13 @@ def crud_update_venue_amenities(db, venue_id):
     return result.modified_count, elapsed_ms
 
 
-def crud_delete_review(db, review_id, venue_id):
+def crud_delete_review(db, review_id, venue_id, user_id="usr_test_goal3"):
     """
-    DELETE: Remove a review criada e reverte a contagem e array recente no venue:
+    DELETE: Remove a review criada e reverte a contagem e array recente no venue e user:
       1. Remove o documento de 'reviews'
       2. Decrementa o review_count no venue ($inc: -1)
       3. Remove o snippet do array embebido 'recent_reviews' ($pull)
+      4. Decrementa o review_count no user ($inc: -1)
     """
     start = time.perf_counter()
     # 1. Remover de reviews
@@ -382,6 +420,13 @@ def crud_delete_review(db, review_id, venue_id):
             "$pull": {"recent_reviews": {"review_id": review_id}}
         }
     )
+
+    # 3. Reverter no utilizador
+    db.users.update_one(
+        {"_id": user_id},
+        {"$inc": {"review_count": -1}}
+    )
+
     elapsed_ms = (time.perf_counter() - start) * 1000
     return elapsed_ms
 
@@ -527,7 +572,8 @@ def main():
     print(f"\n[Q1] Proximidade Espacial (< 1km de Downtown Santa Barbara)")
     print(f"     Tempo: {t1:.2f} ms | Resultados: {len(res1)}")
     if res1:
-        print(f"     Exemplo: {res1[0].get('name')} em {res1[0].get('address')}")
+        addr = res1[0].get('address') or f"{res1[0].get('city', '')}, {res1[0].get('state', '')}".strip(', ')
+        print(f"     Exemplo: {res1[0].get('name')} em {addr}")
 
     # Q2
     res2, t2 = query_2_free_wifi(db)
@@ -540,8 +586,8 @@ def main():
     res3, t3 = query_3_top10_zone(db)
     print(f"\n[Q3] Top 10 Locais por Zona (Filtering + Sorting)")
     print(f"     Tempo: {t3:.2f} ms | Resultados: {len(res3)}")
-    for i, v in enumerate(res3[:3], 1):
-        print(f"     #{i}: {v.get('name')} - {v.get('stars')}  ({v.get('review_count')} reviews)")
+    for i, v in enumerate(res3, 1):
+        print(f"     #{i:2d}: {v.get('name')} - {v.get('stars')} ★ ({v.get('review_count')} reviews)")
 
     # Q4
     res4, t4 = query_4_outlets_pct(db)
@@ -552,17 +598,20 @@ def main():
 
     # Q5
     res5, t5, uid = query_5_user_history(db)
-    print(f"\n[Q5] Histórico de Locais do Utilizador '{uid}' (Multi-entidade / Lookup)")
-    print(f"     Tempo: {t5:.2f} ms | Locais visitados: {len(res5)}")
+    print(f"\n[Q5] Histórico de Locais do Utilizador Mais Ativo '{uid}' (Multi-entidade / Lookup)")
+    print(f"     Tempo: {t5:.2f} ms | Locais visitados (reviews): {len(res5)}")
     if res5:
-        print(f"     Última visita: {res5[0].get('venue_name')} ({res5[0].get('city')}) - {res5[0].get('user_stars')} ")
+        print(f"     Primeiras visitas registadas:")
+        for r in res5[:5]:
+            d_str = r.get('date').strftime('%Y-%m-%d') if r.get('date') else 'N/A'
+            print(f"       - {r.get('venue_name')} ({r.get('city')}): {r.get('user_stars')} ★ em {d_str}")
 
     # Q6
-    res6, t6, vid = query_6_venue_trend(db)
-    print(f"\n[Q6] Tendência Temporal do Estabelecimento '{vid}' (Aggregation + Temporal)")
+    res6, t6, vid, vname = query_6_venue_trend(db)
+    print(f"\n[Q6] Tendência Temporal do Estabelecimento Mais Popular '{vname}' ({vid})")
     print(f"     Tempo: {t6:.2f} ms | Anos de histórico: {len(res6)}")
     for yr in res6:
-        print(f"     Ano {yr.get('year')}: {yr.get('review_count')} reviews | Rating Médio: {yr.get('avg_stars')} ")
+        print(f"     Ano {yr.get('year')}: {yr.get('review_count'):3d} reviews | Rating Médio: {yr.get('avg_stars')} ★")
 
     print("\n" + "=" * 60)
     print(" OPERAÇÕES DE ESCRITA (INSERT, UPDATE, DELETE)")
@@ -572,7 +621,7 @@ def main():
     rev_id, target_vid, t_ins = crud_insert_review(db)
     print(f"\n[INSERT] Nova Review '{rev_id}' para o Venue '{target_vid}'")
     print(f"         Tempo: {t_ins:.2f} ms")
-    print(f"         Ação: Inserido em 'reviews' + atualizado 'review_count' e 'recent_reviews' em 'venues'")
+    print(f"         Ação: Inserido em 'users' (upsert), 'reviews' + atualizado 'review_count' e 'recent_reviews' em 'venues'")
 
     # UPDATE
     mod_count, t_upd = crud_update_venue_amenities(db, target_vid)
@@ -584,7 +633,7 @@ def main():
     t_del = crud_delete_review(db, rev_id, target_vid)
     print(f"\n[DELETE] Remoção da Review '{rev_id}'")
     print(f"         Tempo: {t_del:.2f} ms")
-    print(f"         Ação: Removido de 'reviews' + revertido 'review_count' e $pull em 'venues'")
+    print(f"         Ação: Removido de 'reviews' + revertido 'review_count' em 'venues' e 'users'")
 
     print("\n" + "=" * 60)
     print(" TRANSAÇÃO MULTI-ENTIDADE (COORDINATED TRANSACTION)")
