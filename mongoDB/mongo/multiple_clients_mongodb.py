@@ -94,7 +94,7 @@ def cliente_escrita(col, venue_id, modo, stats, lock):
 
 
 # ------------------------------------------------------------------------------
-# Orquestra uma ronda completa de testes de escrita concorrente para um modo
+# Organiza uma ronda completa de testes de escrita concorrente para um modo
 # específico ('sem_controlo', 'cas' ou 'atomico'):
 #   1. Regista o valor inicial de 'review_count' no venue de teste.
 #   2. Lança N_CLIENTES threads em paralelo e aguarda a conclusão de todas.
