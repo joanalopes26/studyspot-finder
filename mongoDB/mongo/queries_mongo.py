@@ -432,123 +432,6 @@ def crud_delete_review(db, review_id, venue_id, user_id="usr_test_goal3"):
 
 
 # ----------------------------------------------------------------------
-# TRANSAÇÃO MULTI-ENTIDADE: SUBMISSÃO DE REVIEW COM PROPAGAÇÃO
-# ----------------------------------------------------------------------
-def transaction_submit_review_multi_entity(client, db, venue_id=None, user_id=None, stars=5):
-    """
-    Transação multi-entidade envolvendo alterações coordenadas em 3 coleções:
-      1. 'reviews': Insere a nova avaliação
-      2. 'venues': Atualiza contagem total, array recente e recalcula nota
-      3. 'users': Atualiza a contagem de avaliações do utilizador
-    
-    Demonstra a capacidade ACID multi-documento no MongoDB.
-    """
-    import datetime
-    import uuid
-    from pymongo.read_concern import ReadConcern
-    from pymongo.write_concern import WriteConcern
-
-    # Obter dados de teste existentes se não forem fornecidos
-    if not venue_id:
-        v = db.venues.find_one({"is_open": True})
-        venue_id = v["_id"] if v else "demo_venue"
-
-    if not user_id:
-        u = db.users.find_one()
-        user_id = u["_id"] if u else "demo_user"
-
-    rev_id = f"rev_tx_{uuid.uuid4().hex[:6]}"
-    now = datetime.datetime.now(datetime.timezone.utc)
-
-    new_review = {
-        "_id": rev_id,
-        "venue_id": venue_id,
-        "user_id": user_id,
-        "stars": int(stars),
-        "useful": 0,
-        "funny": 0,
-        "cool": 0,
-        "date": now,
-        "text": "Transação multi-entidade: espaço com excelente conectividade e tomadas.",
-        "mentions_wifi": True,
-        "mentions_outlets": True,
-        "mentions_pastry": False
-    }
-
-    recent_entry = {
-        "review_id": rev_id,
-        "user_id": user_id,
-        "stars": int(stars),
-        "date": now,
-        "text_snippet": new_review["text"][:200]
-    }
-
-    start = time.perf_counter()
-    committed = False
-    mode_used = ""
-
-    # Tentar transação ACID nativa com sessão
-    try:
-        wc_majority = WriteConcern("majority", wtimeout=2000)
-        with client.start_session() as session:
-            def txn_body(s):
-                # 1. Inserir em reviews
-                db.reviews.insert_one(new_review, session=s)
-
-                # 2. Atualizar venue (review_count, recent_reviews, outlet_mentions)
-                db.venues.update_one(
-                    {"_id": venue_id},
-                    {
-                        "$inc": {"review_count": 1, "amenities.outlet_mentions": 1},
-                        "$push": {
-                            "recent_reviews": {
-                                "$each": [recent_entry],
-                                "$slice": -10
-                            }
-                        }
-                    },
-                    session=s
-                )
-
-                # 3. Atualizar utilizador (review_count)
-                db.users.update_one(
-                    {"_id": user_id},
-                    {"$inc": {"review_count": 1}},
-                    session=s
-                )
-                return True
-
-            session.with_transaction(
-                txn_body,
-                read_concern=ReadConcern("local"),
-                write_concern=wc_majority
-            )
-            committed = True
-            mode_used = "ACID Multi-documento (Session Transaction)"
-
-    except Exception as e:
-        # Se o MongoDB for standalone (sem replica set), simula a transação coordenada
-        # aplicando as alterações de forma sequencial com controlo de consistência
-        mode_used = "Standalone Coordenado (Sem Replica Set)"
-        db.reviews.insert_one(new_review)
-        db.venues.update_one(
-            {"_id": venue_id},
-            {
-                "$inc": {"review_count": 1, "amenities.outlet_mentions": 1},
-                "$push": {"recent_reviews": {"$each": [recent_entry], "$slice": -10}}
-            }
-        )
-        db.users.update_one(
-            {"_id": user_id},
-            {"$inc": {"review_count": 1}}
-        )
-        committed = True
-
-    elapsed_ms = (time.perf_counter() - start) * 1000
-    return rev_id, venue_id, user_id, elapsed_ms, mode_used
-
-
-# ----------------------------------------------------------------------
 # Execução Principal e Relatório de Benchmark
 # ----------------------------------------------------------------------
 def main():
@@ -636,20 +519,6 @@ def main():
     print(f"         Ação: Removido de 'reviews' + revertido 'review_count' em 'venues' e 'users'")
 
     print("\n" + "=" * 60)
-    print(" TRANSAÇÃO MULTI-ENTIDADE (COORDINATED TRANSACTION)")
-    print("=" * 60)
-
-    # TRANSAÇÃO MULTI-ALTERAÇÕES
-    tx_rev, tx_ven, tx_usr, t_tx, tx_mode = transaction_submit_review_multi_entity(client, db)
-    print(f"\n[TRANSACTION] Submissão Coordenada de Review '{tx_rev}'")
-    print(f"              Modo: {tx_mode}")
-    print(f"              Tempo: {t_tx:.2f} ms")
-    print(f"              Alterações relacionadas aplicadas:")
-    print(f"                1. reviews: Inserido novo documento")
-    print(f"                2. venues ('{tx_ven}'): review_count +1, push em recent_reviews, outlet_mentions +1")
-    print(f"                3. users ('{tx_usr}'): review_count +1")
-
-    print("\n" + "=" * 60)
     print(" RESUMO DE LATÊNCIA (MONGODB):")
     print(" --- Consultas (Read) ---")
     print(f"  Q1 (Spatial):          {t1:8.2f} ms")
@@ -662,8 +531,6 @@ def main():
     print(f"  INSERT (Review+Venue): {t_ins:8.2f} ms")
     print(f"  UPDATE (Amenities):    {t_upd:8.2f} ms")
     print(f"  DELETE (Review+Venue): {t_del:8.2f} ms")
-    print(" --- Transação Multi-Entidade ---")
-    print(f"  TX Submissão Coordenada: {t_tx:6.2f} ms ({tx_mode})")
     print("=" * 60)
 
     client.close()
