@@ -50,7 +50,7 @@ import mysql.connector
 MYSQL_CONFIG = {
     "host": "localhost",
     "user": "root",
-    "password": "BDA2627_68059",  # Alterar para a tua palavra-passe
+    "password": "BDA2627_68059",  # alterar
     "database": "studyspot"
 }
 
