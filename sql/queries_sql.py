@@ -317,71 +317,6 @@ def crud_delete_review(cnx, cursor, review_id, venue_id):
     return elapsed_ms
 
 # ----------------------------------------------------------------------
-# TRANSAÇÃO MULTI-ENTIDADE
-# ----------------------------------------------------------------------
-
-def transaction_submit_review_multi_entity(cnx, cursor, venue_id=None, user_id=None, stars=5):
-    """
-    Transação multi-entidade envolvendo alterações coordenadas em 3 coleções:
-    1. Review: Insere a nova avaliação
-    2. Business / Business_Amenities: Atualiza contagem total e contador de outlets
-    3. User: Atualiza a contagem de avaliações do utilizador
-        
-    Demonstra a capacidade ACID multi-documento no MySQL
-    """
-
-    #Obter dados de teste existentes se não forem fornecidos
-    if not venue_id:
-        cursor.execute("SELECT business_id FROM Business WHERE is_open = 1 LIMIT 1")
-        row = cursor.fetchone()
-        venue_id = row["business_id"] if row else "demo_venue"
-
-    if not user_id:
-        cursor.execute("SELECT user_id FROM User LIMIT 1")
-        row = cursor.fetchone()
-        user_id = row["user_id"] if row else "demo_user"
-
-    rev_id = f"rev_tx_{uuid.uuid4().hex[:6]}"
-    now = datetime.datetime.now()
-
-    start = time.perf_counter()
-
-    try: 
-        if cnx.in_transaction:
-            cnx.commit()  
-
-        cnx.start_transaction()
-
-        #1. Inserir a nova review
-        sql_rev = """
-            INSERT INTO Review (
-                review_id, business_id, user_id, stars, useful, funny, cool,
-                review_date, text, mentions_wifi, mentions_outlets, mentions_pastry
-            ) VALUES (%s, %s, %s, %s, 0, 0, 0, %s, "Transação multi-entidade: espaço com excelente conectividade e tomadas.", 1, 1, 0)
-        """
-        cursor.execute(sql_rev, (rev_id, venue_id, user_id, int(stars), now))
-
-        #2. Atualizar Business e Business_Amenities
-        sql_biz = "UPDATE Business SET review_count = review_count + 1 WHERE business_id = %s"
-        sql_amen = "UPDATE Business_Amenities SET outlet_mentions = outlet_mentions + 1 WHERE business_id = %s"
-        cursor.execute(sql_biz, (venue_id,))
-        cursor.execute(sql_amen, (venue_id,))
-
-        #3. Atualizar User
-        sql_user = "UPDATE User SET review_count = review_count + 1 WHERE user_id = %s"
-        cursor.execute(sql_user, (user_id,))
-
-        cnx.commit()
-        elapsed_ms = (time.perf_counter() - start) * 1000
-        mode_used = "ACID Multi-Tabelas"
-        return rev_id, venue_id, user_id, elapsed_ms, mode_used
-
-    except Exception as e:
-        cnx.rollback()
-        elapsed_ms = (time.perf_counter() - start) * 1000
-        return None, None, None, elapsed_ms, f"Erro (Rollback): {e}"
-
-# ----------------------------------------------------------------------
 # Execução Principal e Relatório de Benchmark
 # ----------------------------------------------------------------------
 def main():
@@ -464,20 +399,6 @@ def main():
     print(f"         Ação: Removido de Review + revertido 'review_count' e outlet_mentions'")
 
     print("\n" + "=" * 60)
-    print(" TRANSAÇÃO MULTI-ENTIDADE (COORDINATED TRANSACTION)")
-    print("=" * 60)
-
-    #TRANSAÇÃO MULTI-ALTERAÇÕES
-    tx_rev, tx_ven, tx_usr, t_tx, tx_mode = transaction_submit_review_multi_entity(cnx, cursor)
-    print(f"\n[TRANSACTION] Submissão Coordenada de Review '{tx_rev}'")
-    print(f"              Modo: {tx_mode}")
-    print(f"              Tempo: {t_tx:.2f} ms")
-    print(f"              Alterações relacionadas aplicadas:")
-    print(f"                1. Review: Inserido novo documento")
-    print(f"                2. Business / Business_Amenities ('{tx_ven}'): review_count +1, outlet_mentions +1")
-    print(f"                3. User ('{tx_usr}'): review_count +1")
-
-    print("\n" + "=" * 60)
     print(" RESUMO DE LATÊNCIA (MYSQL):")
     print(" --- Consultas (Read) ---")
     print(f"  Q1 (Spatial):          {t1:8.2f} ms")
@@ -490,8 +411,6 @@ def main():
     print(f"  INSERT (Review+Venue): {t_ins:8.2f} ms")
     print(f"  UPDATE (Amenities):    {t_upd:8.2f} ms")
     print(f"  DELETE (Review+Venue): {t_del:8.2f} ms")
-    print(" --- Transação Multi-Entidade ---")
-    print(f"  TX Submissão Coordenada: {t_tx:6.2f} ms ({tx_mode})")
     print("=" * 60)
 
     cursor.close()
