@@ -28,7 +28,7 @@ from pymongo.read_concern import ReadConcern
 from pymongo.write_concern import WriteConcern
 
 
-MONGO_URI = "mongodb://localhost:27017"
+MONGO_URL = "mongodb://localhost:27017"
 DB_NAME = "studyspot"
 
 # ------------------------------------------------------------------------------
@@ -136,7 +136,7 @@ def executar_transacao(client, db, venue_id, user_id, stars=5, forcar_falha=Fals
 # documentos originais no bloco 'finally'.
 # ------------------------------------------------------------------------------
 def main():
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=5000)
 
     # Verifica se o MongoDB está a correr como Replica Set (obrigatório para ACID multi-doc)
     if not client.admin.command("hello").get("setName"):
