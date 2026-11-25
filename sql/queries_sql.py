@@ -66,6 +66,21 @@ def ensure_indexes(cursor, cnx):
     print(" Índices verificados/criados com sucesso.\n")
 
 # ----------------------------------------------------------------------
+# 0. Contagem Simples de Locais (Simple Count / Baseline)
+# ----------------------------------------------------------------------
+def query_0_count_venues(cursor):
+    """
+    Query Simples: Devolve o número total de cafés/bakeries (Business) existentes na base de dados.
+    Serve como baseline de leitura simples sem filtros complexos ou junções.
+    """
+    start = time.perf_counter()
+    cursor.execute("SELECT COUNT(*) AS total_venues FROM Business")
+    row = cursor.fetchone()
+    total_venues = row["total_venues"] if row else 0
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    return total_venues, elapsed_ms
+
+# ----------------------------------------------------------------------
 # 1. Proximidade Espacial (Sorting + Spatial)
 # ----------------------------------------------------------------------
 def query_1_spatial(cursor, coordinates=(-119.7000, 34.4200), max_distance_meters=1000):
@@ -331,8 +346,13 @@ def main():
     ensure_indexes(cursor, cnx)
 
     print("=" * 60)
-    print(" EXECUÇÃO DAS 6 QUERIES (GOAL 3) - MYSQL BENCHMARK")
+    print(" EXECUÇÃO DAS QUERIES (GOAL 3) - MYSQL BENCHMARK")
     print("=" * 60)
+
+    # Q0
+    total_v, t0 = query_0_count_venues(cursor)
+    print(f"\n[Q0] Contagem Total de Cafés/Bakeries (Simple Query)")
+    print(f"     Tempo: {t0:.2f} ms | Total de Business: {total_v}")
 
     #Q1
     res1, t1 = query_1_spatial(cursor)
@@ -401,6 +421,7 @@ def main():
     print("\n" + "=" * 60)
     print(" RESUMO DE LATÊNCIA (MYSQL):")
     print(" --- Consultas (Read) ---")
+    print(f"  Q0 (Total Venues):     {t0:8.2f} ms")
     print(f"  Q1 (Spatial):          {t1:8.2f} ms")
     print(f"  Q2 (Free WiFi):        {t2:8.2f} ms")
     print(f"  Q3 (Top 10):           {t3:8.2f} ms")
