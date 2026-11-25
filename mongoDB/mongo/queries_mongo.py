@@ -319,80 +319,87 @@ def query_6_venue_trend(db, venue_id=None):
 # ----------------------------------------------------------------------
 # OPERAÇÕES DE ESCRITA: INSERT, UPDATE, DELETE
 # ----------------------------------------------------------------------
-def crud_insert_review(db, venue_id=None, user_id="usr_test_goal3"):
+def crud_insert_multi_entity(db):
     """
-    INSERT: Insere uma nova review e propaga a alteração ao documento do venue e utilizador:
-      1. Garante que o utilizador existe em 'users' (upsert com $setOnInsert / $inc)
-      2. Insere o documento completo na coleção 'reviews'
-      3. Atualiza o documento em 'venues': incrementa 'review_count' ($inc)
-         e insere no array embebido 'recent_reviews' ($push com $slice: -10)
+    INSERT MULTI-ENTIDADE: Cria em simultâneo:
+      1. Um novo utilizador ('users')
+      2. Um novo estabelecimento ('venues') com categorias, amenities e GeoJSON Point
+      3. A primeira review ('reviews') desse novo utilizador para esse novo local,
+         refletindo-a também no array embebido 'recent_reviews' do venue.
     """
     import datetime
     import uuid
 
-    if not venue_id:
-        sample_v = db.venues.find_one()
-        venue_id = sample_v["_id"] if sample_v else "demo_venue"
-
-    review_id = f"rev_test_{uuid.uuid4().hex[:6]}"
+    uid_suffix = uuid.uuid4().hex[:6]
+    new_user_id = f"usr_new_{uid_suffix}"
+    new_venue_id = f"biz_new_{uid_suffix}"
+    new_review_id = f"rev_new_{uid_suffix}"
     now = datetime.datetime.now(datetime.timezone.utc)
-    
-    new_review = {
-        "_id": review_id,
-        "venue_id": venue_id,
-        "user_id": user_id,
+
+    # 1. Documento do Utilizador
+    user_doc = {
+        "_id": new_user_id,
+        "name": f"Estudante Novo {uid_suffix}",
+        "review_count": 1,
+        "yelping_since": now,
+        "average_stars": 5.0
+    }
+
+    # 2. Documento da Review
+    review_doc = {
+        "_id": new_review_id,
+        "venue_id": new_venue_id,
+        "user_id": new_user_id,
         "stars": 5,
-        "useful": 0,
+        "useful": 1,
         "funny": 0,
-        "cool": 0,
+        "cool": 1,
         "date": now,
-        "text": "Espaço excelente com bastantes tomadas e wifi rápido para estudar!",
+        "text": "Inauguração fantástica! Espaço novo muito acolhedor, wifi super rápido e tomadas em todas as mesas.",
         "mentions_wifi": True,
         "mentions_outlets": True,
-        "mentions_pastry": False
+        "mentions_pastry": True
+    }
+
+    # 3. Documento do Estabelecimento (com subdocumento amenities e array recent_reviews)
+    recent_entry = {
+        "review_id": new_review_id,
+        "user_id": new_user_id,
+        "stars": 5,
+        "date": now,
+        "text_snippet": review_doc["text"][:200]
+    }
+    venue_doc = {
+        "_id": new_venue_id,
+        "name": f"Novo Study Hub {uid_suffix}",
+        "address": "999 Innovation Way",
+        "city": "Santa Barbara",
+        "state": "CA",
+        "postal_code": "93101",
+        "location": {
+            "type": "Point",
+            "coordinates": [-119.7020, 34.4215]
+        },
+        "stars": 5.0,
+        "review_count": 1,
+        "is_open": True,
+        "categories": ["Coffee & Tea", "Cafes", "Co-Working Spaces"],
+        "amenities": {
+            "wifi": "free",
+            "noise_level": "quiet",
+            "outlet_mentions": 1
+        },
+        "recent_reviews": [recent_entry]
     }
 
     start = time.perf_counter()
-
-    # 1. Inserir ou atualizar utilizador (equivalente ao ON DUPLICATE KEY UPDATE do MySQL)
-    db.users.update_one(
-        {"_id": user_id},
-        {
-            "$setOnInsert": {
-                "name": "Test User Goal3",
-                "yelping_since": now,
-                "average_stars": 5.0
-            },
-            "$inc": {"review_count": 1}
-        },
-        upsert=True
-    )
-
-    # 2. Inserir em reviews
-    db.reviews.insert_one(new_review)
-
-    # 3. Atualizar venue (incremental + array embebido de reviews recentes)
-    recent_entry = {
-        "review_id": review_id,
-        "user_id": user_id,
-        "stars": 5,
-        "date": now,
-        "text_snippet": new_review["text"][:200]
-    }
-    db.venues.update_one(
-        {"_id": venue_id},
-        {
-            "$inc": {"review_count": 1, "amenities.outlet_mentions": 1},
-            "$push": {
-                "recent_reviews": {
-                    "$each": [recent_entry],
-                    "$slice": -10  # Mantém apenas as últimas 10
-                }
-            }
-        }
-    )
+    # Executa a criação nas 3 coleções
+    db.users.insert_one(user_doc)
+    db.venues.insert_one(venue_doc)
+    db.reviews.insert_one(review_doc)
     elapsed_ms = (time.perf_counter() - start) * 1000
-    return review_id, venue_id, elapsed_ms
+
+    return new_user_id, new_venue_id, new_review_id, elapsed_ms
 
 
 def crud_update_venue_amenities(db, venue_id):
@@ -414,33 +421,15 @@ def crud_update_venue_amenities(db, venue_id):
     return result.modified_count, elapsed_ms
 
 
-def crud_delete_review(db, review_id, venue_id, user_id="usr_test_goal3"):
+def crud_delete_multi_entity(db, user_id, venue_id, review_id):
     """
-    DELETE: Remove a review criada e reverte a contagem e array recente no venue e user:
-      1. Remove o documento de 'reviews'
-      2. Decrementa o review_count no venue ($inc: -1)
-      3. Remove o snippet do array embebido 'recent_reviews' ($pull)
-      4. Decrementa o review_count no user ($inc: -1)
+    DELETE: Remove todas as entidades criadas no teste de inserção
+    multi-entidade, mantendo o dataset limpo e consistente.
     """
     start = time.perf_counter()
-    # 1. Remover de reviews
     db.reviews.delete_one({"_id": review_id})
-
-    # 2. Reverter no venue
-    db.venues.update_one(
-        {"_id": venue_id},
-        {
-            "$inc": {"review_count": -1, "amenities.outlet_mentions": -1},
-            "$pull": {"recent_reviews": {"review_id": review_id}}
-        }
-    )
-
-    # 3. Reverter no utilizador
-    db.users.update_one(
-        {"_id": user_id},
-        {"$inc": {"review_count": -1}}
-    )
-
+    db.venues.delete_one({"_id": venue_id})
+    db.users.delete_one({"_id": user_id})
     elapsed_ms = (time.perf_counter() - start) * 1000
     return elapsed_ms
 
@@ -519,23 +508,23 @@ def main():
     print(" OPERAÇÕES DE ESCRITA (INSERT, UPDATE, DELETE)")
     print("=" * 60)
 
-    # INSERT
-    rev_id, target_vid, t_ins = crud_insert_review(db)
-    print(f"\n[INSERT] Nova Review '{rev_id}' para o Venue '{target_vid}'")
+    # INSERT MULTI-ENTIDADE
+    new_uid, new_vid, new_rid, t_ins = crud_insert_multi_entity(db)
+    print(f"\n[INSERT] Criação Multi-Entidade (Novo User + Novo Venue + Nova Review)")
     print(f"         Tempo: {t_ins:.2f} ms")
-    print(f"         Ação: Inserido em 'users' (upsert), 'reviews' + atualizado 'review_count' e 'recent_reviews' em 'venues'")
+    print(f"         Criados: User '{new_uid}', Venue '{new_vid}', Review '{new_rid}'")
 
     # UPDATE
-    mod_count, t_upd = crud_update_venue_amenities(db, target_vid)
-    print(f"\n[UPDATE] Atualização de Comodidades do Venue '{target_vid}'")
+    mod_count, t_upd = crud_update_venue_amenities(db, new_vid)
+    print(f"\n[UPDATE] Atualização de Comodidades do Venue '{new_vid}'")
     print(f"         Tempo: {t_upd:.2f} ms | Documentos modificados: {mod_count}")
     print(f"         Ação: $set em amenities.wifi = 'free' e noise_level = 'quiet'")
 
-    # DELETE
-    t_del = crud_delete_review(db, rev_id, target_vid)
-    print(f"\n[DELETE] Remoção da Review '{rev_id}'")
+    # DELETE MULTI-ENTIDADE
+    t_del = crud_delete_multi_entity(db, new_uid, new_vid, new_rid)
+    print(f"\n[DELETE] Remoção Multi-Entidade (Limpeza dos 3 registos criados)")
     print(f"         Tempo: {t_del:.2f} ms")
-    print(f"         Ação: Removido de 'reviews' + revertido 'review_count' em 'venues' e 'users'")
+    print(f"         Ação: Removido de 'reviews', 'venues' e 'users'")
 
     print("\n" + "=" * 60)
     print(" RESUMO DE LATÊNCIA (MONGODB):")
@@ -548,9 +537,9 @@ def main():
     print(f"  Q5 (User History):     {t5:8.2f} ms")
     print(f"  Q6 (Temporal Trend):   {t6:8.2f} ms")
     print(" --- Operações de Escrita (Write) ---")
-    print(f"  INSERT (Review+Venue): {t_ins:8.2f} ms")
-    print(f"  UPDATE (Amenities):    {t_upd:8.2f} ms")
-    print(f"  DELETE (Review+Venue): {t_del:8.2f} ms")
+    print(f"  INSERT (User+Venue+Rev): {t_ins:6.2f} ms")
+    print(f"  UPDATE (Amenities):      {t_upd:6.2f} ms")
+    print(f"  DELETE (User+Venue+Rev): {t_del:6.2f} ms")
     print("=" * 60)
 
     client.close()

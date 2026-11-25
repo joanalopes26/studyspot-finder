@@ -252,47 +252,74 @@ def query_6_venue_trend(cursor, venue_id=None):
 # ----------------------------------------------------------------------
 # OPERAÇÕES DE ESCRITA: INSERT, UPDATE, DELETE
 # ----------------------------------------------------------------------
-def crud_insert_review(cnx, cursor, venue_id=None, user_id="usr_test_goal3"):
+def crud_insert_multi_entity(cnx, cursor):
     """
-    INSERT: Insere uma nova review e propaga a contagem nas tabelas associadas
+    INSERT MULTI-ENTIDADE: Cria em simultâneo:
+      1. Um novo utilizador na tabela 'User'
+      2. Um novo estabelecimento na tabela 'Business' (com geometria POINT)
+      3. As comodidades associadas na tabela 'Business_Amenities'
+      4. A ligação à categoria na tabela 'BusinessCategory'
+      5. A primeira review desse novo utilizador para esse novo local na tabela 'Review'
     """
-    if not venue_id:
-        cursor.execute("SELECT business_id FROM Review LIMIT 1")
-        row = cursor.fetchone()
-        venue_id = row["business_id"] if row else "demo_venue"
-
-    review_id = f"rev_test_{uuid.uuid4().hex[:6]}"
+    uid_suffix = uuid.uuid4().hex[:6]
+    new_user_id = f"usr_new_{uid_suffix}"
+    new_venue_id = f"biz_new_{uid_suffix}"
+    new_review_id = f"rev_new_{uid_suffix}"
     now = datetime.datetime.now()
 
     start = time.perf_counter()
 
-    #Inserir dados do utilizador (se não existir)
+    # 1. Inserir User
     sql_user = """
         INSERT INTO User (user_id, name, review_count, yelping_since, average_stars)
-        VALUES (%s, 'Test User Goal3', 1, %s, 0)
-        ON DUPLICATE KEY UPDATE review_count = review_count + 1
+        VALUES (%s, %s, 1, %s, 5.0)
     """
+    cursor.execute(sql_user, (new_user_id, f"Estudante Novo {uid_suffix}", now))
 
-    cursor.execute(sql_user, (user_id, now))
+    # 2. Inserir Business
+    sql_biz = """
+        INSERT INTO Business (
+            business_id, name, address, city, state, postal_code, location, stars, review_count, is_open
+        ) VALUES (
+            %s, %s, '999 Innovation Way', 'Santa Barbara', 'CA', '93101',
+            ST_GeomFromText('POINT(34.4215 -119.7020)', 4326), 5.0, 1, 1
+        )
+    """
+    cursor.execute(sql_biz, (new_venue_id, f"Novo Study Hub {uid_suffix}"))
 
-    sql_insert_rev = """
+    # 3. Inserir Business_Amenities
+    sql_amen = """
+        INSERT INTO Business_Amenities (business_id, wifi, noise_level, outlet_mentions)
+        VALUES (%s, 'free', 'quiet', 1)
+    """
+    cursor.execute(sql_amen, (new_venue_id,))
+
+    # 4. Inserir BusinessCategory (garantindo que existe pelo menos uma categoria base)
+    cursor.execute("SELECT category_id FROM Category LIMIT 1")
+    cat_row = cursor.fetchone()
+    if cat_row:
+        cat_id = cat_row["category_id"]
+        cursor.execute(
+            "INSERT INTO BusinessCategory (business_id, category_id) VALUES (%s, %s)",
+            (new_venue_id, cat_id)
+        )
+
+    # 5. Inserir Review
+    sql_rev = """
         INSERT INTO Review (
             review_id, business_id, user_id, stars, useful, funny, cool,
-            review_date, text, mentions_wifi, mentions_outlets, mentions_pastry) 
-        VALUES (%s, %s, %s, 5, 0, 0, 0, %s, "Espaço excelente com bastantes tomadas e wifi rápido para estudar!", 1, 1, 0)
+            review_date, text, mentions_wifi, mentions_outlets, mentions_pastry
+        ) VALUES (
+            %s, %s, %s, 5, 1, 0, 1, %s,
+            'Inauguração fantástica! Espaço novo muito acolhedor, wifi super rápido e tomadas em todas as mesas.',
+            1, 1, 1
+        )
     """
-
-    cursor.execute(sql_insert_rev, (review_id, venue_id, user_id, now))
-    
-    sql_update_biz = "UPDATE Business SET review_count = review_count + 1 WHERE business_id = %s"
-    sql_update_amen = "UPDATE Business_Amenities SET outlet_mentions = outlet_mentions + 1 WHERE business_id = %s"
-    cursor.execute(sql_update_biz, (venue_id,))
-    cursor.execute(sql_update_amen, (venue_id,))
+    cursor.execute(sql_rev, (new_review_id, new_venue_id, new_user_id, now))
 
     cnx.commit()
-
     elapsed_ms = (time.perf_counter() - start) * 1000
-    return review_id, venue_id, elapsed_ms
+    return new_user_id, new_venue_id, new_review_id, elapsed_ms
 
 
 def crud_update_venue_amenities(cnx, cursor, venue_id):
@@ -313,21 +340,19 @@ def crud_update_venue_amenities(cnx, cursor, venue_id):
     elapsed_ms = (time.perf_counter() - start) * 1000
     return mod_count, elapsed_ms
 
-def crud_delete_review(cnx, cursor, review_id, venue_id):
-    """
-    DELETE: Remove a review criada e reverte as contagens nas tabelas associadas
-    """
-    sql_delete_rev = "DELETE FROM Review WHERE review_id = %s"
-    sql_revert_biz = "UPDATE Business SET review_count = review_count - 1 WHERE business_id = %s"
-    sql_revert_amen = "UPDATE Business_Amenities SET outlet_mentions = outlet_mentions - 1 WHERE business_id = %s"
 
+def crud_delete_multi_entity(cnx, cursor, user_id, venue_id, review_id):
+    """
+    DELETE: Remove todas as entidades criadas no teste de inserção multi-entidade
+    respeitando as regras de chaves forasteiras.
+    """
     start = time.perf_counter()
-
-    cursor.execute(sql_delete_rev, (review_id,))
-    cursor.execute(sql_revert_biz, (venue_id,))
-    cursor.execute(sql_revert_amen, (venue_id,))
+    cursor.execute("DELETE FROM Review WHERE review_id = %s", (review_id,))
+    cursor.execute("DELETE FROM BusinessCategory WHERE business_id = %s", (venue_id,))
+    cursor.execute("DELETE FROM Business_Amenities WHERE business_id = %s", (venue_id,))
+    cursor.execute("DELETE FROM Business WHERE business_id = %s", (venue_id,))
+    cursor.execute("DELETE FROM User WHERE user_id = %s", (user_id,))
     cnx.commit()
-
     elapsed_ms = (time.perf_counter() - start) * 1000
     return elapsed_ms
 
@@ -400,23 +425,23 @@ def main():
     print(" OPERAÇÕES DE ESCRITA (INSERT, UPDATE, DELETE)")
     print("=" * 60)
 
-    # INSERT
-    rev_id, target_vid, t_ins = crud_insert_review(cnx, cursor)
-    print(f"\n[INSERT] Nova Review '{rev_id}' para o Venue '{target_vid}'")
+    # INSERT MULTI-ENTIDADE
+    new_uid, new_vid, new_rid, t_ins = crud_insert_multi_entity(cnx, cursor)
+    print(f"\n[INSERT] Criação Multi-Entidade (Novo User + Novo Venue + Nova Review)")
     print(f"         Tempo: {t_ins:.2f} ms")
-    print(f"         Ação: Inserido em 'Review' + atualizado 'review_count' em Business e 'outlet_mentions' em 'Business_Amenities'")
+    print(f"         Criados: User '{new_uid}', Business '{new_vid}', Review '{new_rid}'")
 
     # UPDATE
-    mod_count, t_upd = crud_update_venue_amenities(cnx, cursor, target_vid)
-    print(f"\n[UPDATE] Atualização de Comodidades do Venue '{target_vid}'")
+    mod_count, t_upd = crud_update_venue_amenities(cnx, cursor, new_vid)
+    print(f"\n[UPDATE] Atualização de Comodidades do Venue '{new_vid}'")
     print(f"         Tempo: {t_upd:.2f} ms | Documentos modificados: {mod_count}")
     print(f"         Ação: UPDATE em Business_Amenities SET wifi='free' e noise_level='quiet'")
 
-    # DELETE
-    t_del = crud_delete_review(cnx, cursor, rev_id, target_vid)
-    print(f"\n[DELETE] Remoção da Review '{rev_id}'")
+    # DELETE MULTI-ENTIDADE
+    t_del = crud_delete_multi_entity(cnx, cursor, new_uid, new_vid, new_rid)
+    print(f"\n[DELETE] Remoção Multi-Entidade (Limpeza dos registos criados)")
     print(f"         Tempo: {t_del:.2f} ms")
-    print(f"         Ação: Removido de Review + revertido 'review_count' e outlet_mentions'")
+    print(f"         Ação: Removido de Review, BusinessCategory, Business_Amenities, Business e User")
 
     print("\n" + "=" * 60)
     print(" RESUMO DE LATÊNCIA (MYSQL):")
@@ -429,9 +454,9 @@ def main():
     print(f"  Q5 (User History):     {t5:8.2f} ms")
     print(f"  Q6 (Temporal Trend):   {t6:8.2f} ms")
     print(" --- Operações de Escrita (Write) ---")
-    print(f"  INSERT (Review+Venue): {t_ins:8.2f} ms")
-    print(f"  UPDATE (Amenities):    {t_upd:8.2f} ms")
-    print(f"  DELETE (Review+Venue): {t_del:8.2f} ms")
+    print(f"  INSERT (User+Venue+Rev): {t_ins:6.2f} ms")
+    print(f"  UPDATE (Amenities):      {t_upd:6.2f} ms")
+    print(f"  DELETE (User+Venue+Rev): {t_del:6.2f} ms")
     print("=" * 60)
 
     cursor.close()
