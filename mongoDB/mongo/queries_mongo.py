@@ -47,7 +47,7 @@ def ensure_indexes(db):
 
 
 # ----------------------------------------------------------------------
-# 0. Contagem Simples de Locais (Simple Count / Baseline)
+# 0. Contagem Simples de Lugares (Simple Count / Baseline)
 # ----------------------------------------------------------------------
 def query_0_count_venues(db):
     """
@@ -65,7 +65,7 @@ def query_0_count_venues(db):
 # ----------------------------------------------------------------------
 def query_1_spatial(db, coordinates=(-119.7000, 34.4200), max_distance_meters=1000):
     """
-    Encontrar locais abertos num raio de 1km a partir de um ponto (ex: Santa Barbara Downtown).
+    Encontrar lugares abertos num raio de 1km a partir de um ponto (ex: Santa Barbara Downtown).
     Ordenados nativamente por proximidade graças ao $near.
     """
     start = time.perf_counter()
@@ -97,11 +97,11 @@ def query_1_spatial(db, coordinates=(-119.7000, 34.4200), max_distance_meters=10
 
 
 # ----------------------------------------------------------------------
-# 2. Pesquisa de Locais com "Free Wifi" (Filtering + Projection)
+# 2. Pesquisa de Lugares com "Free Wifi" (Filtering + Projection)
 # ----------------------------------------------------------------------
 def query_2_free_wifi(db, city="Santa Barbara"):
     """
-    Pesquisar locais específicos com "free wifi" projetando os campos essenciais.
+    Pesquisar lugares específicos com "free wifi" projetando os campos essenciais.
     Graças aos subdocumentos embebidos (amenities), dispensa qualquer $lookup.
     """
     start = time.perf_counter()
@@ -126,11 +126,11 @@ def query_2_free_wifi(db, city="Santa Barbara"):
 
 
 # ----------------------------------------------------------------------
-# 3. Top 10 Locais por Zona (Filtering + Sorting)
+# 3. Top 10 Lugares por Zona (Filtering + Sorting)
 # ----------------------------------------------------------------------
 def query_3_top10_zone(db, city="Santa Barbara"):
     """
-    Listar o top 10 de locais com melhor rating (stars) numa zona/cidade específica,
+    Listar o top 10 de lugares com melhor rating (stars) numa zona/cidade específica,
     ordenado de forma decrescente por rating e depois por número de avaliações.
     """
     start = time.perf_counter()
@@ -214,11 +214,11 @@ def query_4_outlets_pct(db):
 
 
 # ----------------------------------------------------------------------
-# 5. Locais que um Utilizador Específico Frequentou (Multi-entidade / Lookup)
+# 5. Lugares que um Utilizador Específico Frequentou (Multi-entidade / Lookup)
 # ----------------------------------------------------------------------
 def query_5_user_history(db, user_id=None):
     """
-    Listar todos os locais onde um utilizador submeteu reviews.
+    Listar todos os lugares onde um utilizador submeteu reviews.
     Filtra primeiro em reviews ($match precoce) e faz $lookup em venues.
     Se não for fornecido user_id, pesquisa o utilizador mais ativo (com mais reviews).
     """
@@ -324,7 +324,7 @@ def crud_insert_multi_entity(db):
     INSERT MULTI-ENTIDADE: Cria em simultâneo:
       1. Um novo utilizador ('users')
       2. Um novo estabelecimento ('venues') com categorias, amenities e GeoJSON Point
-      3. A primeira review ('reviews') desse novo utilizador para esse novo local,
+      3. A primeira review ('reviews') desse novo utilizador para esse novo lugar,
          refletindo-a também no array embebido 'recent_reviews' do venue.
     """
     import datetime
@@ -455,12 +455,12 @@ def main():
 
     # Q0
     total_v, t0 = query_0_count_venues(db)
-    print(f"\n[Q0] Contagem Total de Cafés/Bakeries (Simple Query)")
+    print(f"\n[Q0] Número Total de Cafés/Bakeries (Simple Query)")
     print(f"     Tempo: {t0:.2f} ms | Total de Venues: {total_v}")
 
     # Q1
     res1, t1 = query_1_spatial(db)
-    print(f"\n[Q1] Proximidade Espacial (< 1km de Downtown Santa Barbara)")
+    print(f"\n[Q1] Proximidade Espacial do centro de Downtown Santa Barbara (< 1km)")
     print(f"     Tempo: {t1:.2f} ms | Resultados: {len(res1)}")
     if res1:
         addr = res1[0].get('address') or f"{res1[0].get('city', '')}, {res1[0].get('state', '')}".strip(', ')
@@ -468,14 +468,14 @@ def main():
 
     # Q2
     res2, t2 = query_2_free_wifi(db)
-    print(f"\n[Q2] Pesquisa Free Wi-Fi (Filtering + Projection)")
+    print(f"\n[Q2] Pesquisa de Cafés/Bakeries com Free Wi-Fi (Filtering + Projection)")
     print(f"     Tempo: {t2:.2f} ms | Resultados: {len(res2)}")
     if res2:
-        print(f"     Exemplo: {res2[0].get('name')} (WiFi: {res2[0].get('amenities', {}).get('wifi')})")
+        print(f"     Por exemplo: {res2[0].get('name')} (WiFi: {res2[0].get('amenities', {}).get('wifi')})")
 
     # Q3
     res3, t3 = query_3_top10_zone(db)
-    print(f"\n[Q3] Top 10 Locais por Zona (Filtering + Sorting)")
+    print(f"\n[Q3] Top 10 Lugares com Melhores Reviews em Santa Barbara (Filtering + Sorting)")
     print(f"     Tempo: {t3:.2f} ms | Resultados: {len(res3)}")
     for i, v in enumerate(res3, 1):
         print(f"     #{i:2d}: {v.get('name')} - {v.get('stars')} ★ ({v.get('review_count')} reviews)")
@@ -489,17 +489,17 @@ def main():
 
     # Q5
     res5, t5, uid = query_5_user_history(db)
-    print(f"\n[Q5] Histórico de Locais do Utilizador Mais Ativo '{uid}' (Multi-entidade / Lookup)")
-    print(f"     Tempo: {t5:.2f} ms | Locais visitados (reviews): {len(res5)}")
+    print(f"\n[Q5] Histórico de Lugares do Utilizador Mais Ativo '{uid}' (Multi-entidade / Lookup)")
+    print(f"     Tempo: {t5:.2f} ms | Lugares visitados (reviews): {len(res5)}")
     if res5:
-        print(f"     Primeiras visitas registadas:")
-        for r in res5[:5]:
+        print(f"Visitas registadas:")
+        for r in res5[:len(res5)]:
             d_str = r.get('date').strftime('%Y-%m-%d') if r.get('date') else 'N/A'
             print(f"       - {r.get('venue_name')} ({r.get('city')}): {r.get('user_stars')} ★ em {d_str}")
 
     # Q6
     res6, t6, vid, vname = query_6_venue_trend(db)
-    print(f"\n[Q6] Tendência Temporal do Estabelecimento Mais Popular '{vname}' ({vid})")
+    print(f"\n[Q6] Número de Reviews por Ano do '{vname}' ({vid})")
     print(f"     Tempo: {t6:.2f} ms | Anos de histórico: {len(res6)}")
     for yr in res6:
         print(f"     Ano {yr.get('year')}: {yr.get('review_count'):3d} reviews | Rating Médio: {yr.get('avg_stars')} ★")

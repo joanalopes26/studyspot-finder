@@ -376,26 +376,26 @@ def main():
 
     # Q0
     total_v, t0 = query_0_count_venues(cursor)
-    print(f"\n[Q0] Contagem Total de Cafés/Bakeries (Simple Query)")
+    print(f"\n[Q0] Número Total de Cafés/Bakeries (Simple Query)")
     print(f"     Tempo: {t0:.2f} ms | Total de Business: {total_v}")
 
     #Q1
     res1, t1 = query_1_spatial(cursor)
-    print(f"\n[Q1] Proximidade Espacial (< 1km de Downtown Santa Barbara)")
+    print(f"\n[Q1] Proximidade Espacial do centro de Downtown Santa Barbara (< 1km)")
     print(f"     Tempo: {t1:.2f} ms | Resultados: {len(res1)}")
     if res1:
         print(f"     Exemplo: {res1[0].get('name')} em {res1[0].get('address')}")
 
     #Q2
     res2, t2 = query_2_free_wifi(cursor)
-    print(f"\n[Q2] Pesquisa Free Wi-Fi (Filtering + Projection)")
+    print(f"\n[Q2] Pesquisa de Cafés/Bakeries com Free Wi-Fi (Filtering + Projection)")
     print(f"     Tempo: {t2:.2f} ms | Resultados: {len(res2)}")
     if res2:
         print(f"     Exemplo: {res2[0].get('name')} (WiFi: {res2[0].get('wifi')})")
 
     #Q3
     res3, t3 = query_3_top10_zone(cursor)
-    print(f"\n[Q3] Top 10 Locais por Zona (Filtering + Sorting)")
+    print(f"\n[Q3]  Top 10 Lugares com Melhores Reviews em Santa Barbara (Filtering + Sorting)")
     print(f"     Tempo: {t3:.2f} ms | Resultados: {len(res3)}")
     for i, v in enumerate(res3[:3], 1):
         print(f"     #{i}: {v.get('name')} - {v.get('stars')}  ({v.get('review_count')} reviews)")
@@ -409,14 +409,14 @@ def main():
 
     #Q5
     res5, t5, uid = query_5_user_history(cursor)
-    print(f"\n[Q5] Histórico de Locais do Utilizador '{uid}' (Multi-entidade / Lookup)")
-    print(f"     Tempo: {t5:.2f} ms | Locais visitados: {len(res5)}")
+    print(f"\n[Q5] Histórico de Lugares do Utilizador mais ativo '{uid}' (Multi-entidade / Lookup)")
+    print(f"     Tempo: {t5:.2f} ms | Lugares visitados: {len(res5)}")
     if res5:
         print(f"     Última visita: {res5[0].get('venue_name')} ({res5[0].get('city')}) - {res5[0].get('user_stars')} ")
 
     #Q6
     res6, t6, vid, vname = query_6_venue_trend(cursor)
-    print(f"\n[Q6] Tendência Temporal do Estabelecimento Mais Popular '{vname}' ({vid})")
+    print(f"\n[Q6] Número de Reviews por Ano do '{vname}' ({vid})")
     print(f"     Tempo: {t6:.2f} ms | Anos de histórico: {len(res6)}")
     for yr in res6:
         print(f"     Ano {yr.get('year')}: {yr.get('review_count'):3d} reviews | Rating Médio: {yr.get('avg_stars')} ★")
