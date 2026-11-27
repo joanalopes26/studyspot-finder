@@ -1,12 +1,3 @@
-"""
-Implementação das 6 Queries no MongoDB para o Goal 3.
-Inclui:
-  - Criação / Verificação de índices de suporte
-  - Execução das 6 queries analíticas e de pesquisa
-  - Medição de tempo de resposta (latência em ms)
-  - Apresentação formatada dos resultados
-"""
-
 import time
 import pprint
 from pymongo import MongoClient

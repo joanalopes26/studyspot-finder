@@ -1,0 +1,36 @@
+
+===========================================================================
+ TABELA COMPARATIVA DE DESEMPENHO (GOAL 4 - MONGODB)
+===========================================================================
+Operação / Query          | Baseline (ms)  | Otimizado (ms) | Variação    
+---------------------------------------------------------------------------
+Q0: Contagem Total        |        3.83 ms |        3.63 ms |        -5.2%
+Q1: Espacial (<1km)       |        3.95 ms |        3.58 ms |        -9.5%
+Q2: Free Wi-Fi            |        5.96 ms |        2.25 ms |       -62.3%
+Q3: Top 10 Ranking        |        5.52 ms |        1.41 ms |       -74.5%
+Q4: Outlets % (Aggr)      |     5143.96 ms |     5069.17 ms |        -1.5%
+Q5: User History          |       62.10 ms |        3.24 ms |       -94.8%
+Q6: Tendência Temporal    |       56.91 ms |        5.65 ms |       -90.1%
+CRUD: Insert Multi        |        3.85 ms |        4.09 ms |        +6.2%
+CRUD: Update Amenities    |        0.91 ms |        0.77 ms |       -14.9%
+CRUD: Delete Multi        |        2.44 ms |        2.47 ms |        +1.4%
+---------------------------------------------------------------------------
+
+===========================================================================
+ ANÁLISE DOS QUERY PLANS (.explain('executionStats'))
+===========================================================================
+Q2 (Free Wi-Fi):
+  - Baseline:  Estágio: PROJECTION_DEFAULT | Docs Examinados: 4832 | Retornados: 94
+  - Otimizado: Estágio: PROJECTION_DEFAULT | Chaves Examinadas: 144 | Retornados: 94
+
+Q3 (Top 10 Ranking):
+  - Baseline:  Estágio: PROJECTION_SIMPLE (In-memory Sort: True) | Docs Examinados: 4832
+  - Otimizado: Estágio: LIMIT (In-memory Sort: False) | Chaves Examinadas: 10
+
+===========================================================================
+ IMPACTO NO ARMAZENAMENTO EM DISCO (STORAGE OVERHEAD)
+===========================================================================
+Tamanho dos Índices (Venues):  312.0 KB  -->  436.0 KB
+Tamanho dos Índices (Reviews): 3300.0 KB  -->  8864.0 KB
+Tamanho Total de Índices:     3612.0 KB  -->  9300.0 KB
+===========================================================================
